@@ -1,0 +1,973 @@
+---
+output: powerpoint_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r include = FALSE}
+library(rmarkdown)
+library(knitr)
+library(kableExtra)
+
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(stringr)
+
+chi <- list()
+tab <- list()
+tab_ind <- integer(0)
+chi_ind <- integer(0)
+
+wk_path <- '/Users/na/Desktop/all_tables_tab2.xlsx'
+wk_sheets <- excel_sheets(wk_path)
+
+for(i in seq_along(wk_sheets)){
+  if(grepl('tab', wk_sheets[i])){
+    tab[[length(tab)+1]] <- read_excel(wk_path, sheet = wk_sheets[i])
+    tab_ind <- c(tab_ind, i)
+  }
+  else if(grepl('chi', wk_sheets[i])){
+    chi[[length(chi)+1]] <- read_excel(wk_path, sheet = wk_sheets[i])
+    chi_ind <- c(chi_ind, i)
+  }
+  else{
+    next
+  }
+  names(tab) <- wk_sheets[tab_ind]
+  names(chi) <- wk_sheets[chi_ind]
+}
+```
+
+## General Health Status
+```{r message = FALSE, echo = FALSE, warning = FALSE}
+var <- 'AB1'
+age <- 'adult'
+
+# Get table from tab, chi lists based on var, age above #####################
+df_tab <- tab[[paste0(var,'_',age,'_tab')]]
+colnames(df_tab)[colnames(df_tab) == paste0('F_',var)] <- 'var_levels'
+df_tab <- df_tab %>% 
+  mutate(var_levels = str_to_title(var_levels))
+  
+
+# Subset chi squared dataframe (only need p value of test)
+srai_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_srai = RowPercent, StdErr_srai = RowStdErr)
+srw_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRW')) %>% 
+  rename(Percent_srw = RowPercent, StdErr_srw = RowStdErr)
+notsrai_tab <- df_tab %>% 
+  filter(Levels == 'NO', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_notsrai = RowPercent, StdErr_notsrai = RowStdErr)
+
+srai_srw_chi <- left_join(srai_tab, srw_tab, by = 'var_levels') %>% 
+  transmute(chi_test = 1)
+srw_srai_chi <- left_join(srw_tab, srai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srw - Percent_srai)**2)/(StdErr_srw**2 + StdErr_srai**2), df = 1, lower.tail = FALSE))
+srai_notsrai_chi <- left_join(srai_tab, notsrai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srai - Percent_notsrai)**2)/(StdErr_srai**2 + StdErr_notsrai**2), df = 1, lower.tail = FALSE))
+
+chi <- rbind(srai_srw_chi, srw_srai_chi, srai_notsrai_chi)
+
+# Filter after getting chi and bind together with chi
+df_tab <- df_tab %>% 
+  filter(is.na(RowPercent) | Levels != 'NO')
+df_all <- cbind(df_tab, chi)
+# To preserve order of values since spread alphabetizes
+level_order <- df_all %>% 
+  filter(is.na(RowPercent)) %>% 
+  .$var_levels
+#Create variables to be displayed
+df_all <- df_all %>% 
+  mutate(pop = ifelse(str_detect(Table, '\\*'), str_match(Table,'\\s([:alpha:]*)\\s')[,1], 'ALL')) %>% 
+  mutate(sub_pop = recode(str_trim(pop), "SRAI" = "AIAN", "SRW" = "White", .default = "All")) %>% 
+  mutate(percent = ifelse(!is.na(RowPercent), RowPercent, Percent)) %>% 
+  mutate(display = 
+           paste0(round(percent,digits = 0), "% (", 
+                  prettyNum(WgtFreq, digits = 0, big.mark = ',', scientific = FALSE),")",
+                  ifelse(chi_test < 0.05 & !is.na(chi_test),'*',''))) %>%
+  select(var_levels, sub_pop, display) %>% 
+  spread(key = sub_pop, value = display) %>% 
+  .[match(level_order, .$var_levels),] %>% 
+  rename(`General Health Status` = var_levels) %>% 
+  select(c(1:2,4:3))
+rownames(df_all) <- NULL
+# Create table to be displayed in presentation
+df_all %>%  
+  kable('markdown', digits = 0, align = rep('c',ncol(.)), 
+        format.args = list(big.mark = ',')) %>% 
+  kable_styling(font_size = 7)
+```
+
+## Diabetes
+```{r message = FALSE, echo = FALSE, warning = FALSE}
+var <- 'AB22'
+age <- 'adult'
+
+# Get table from tab, chi lists based on var, age above #####################
+df_tab <- tab[[paste0(var,'_',age,'_tab')]]
+colnames(df_tab)[colnames(df_tab) == paste0('F_',var)] <- 'var_levels'
+df_tab <- df_tab %>% 
+  mutate(var_levels = str_to_title(var_levels))
+  
+
+# Subset chi squared dataframe (only need p value of test)
+srai_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_srai = RowPercent, StdErr_srai = RowStdErr)
+srw_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRW')) %>% 
+  rename(Percent_srw = RowPercent, StdErr_srw = RowStdErr)
+notsrai_tab <- df_tab %>% 
+  filter(Levels == 'NO', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_notsrai = RowPercent, StdErr_notsrai = RowStdErr)
+
+srai_srw_chi <- left_join(srai_tab, srw_tab, by = 'var_levels') %>% 
+  transmute(chi_test = 1)
+srw_srai_chi <- left_join(srw_tab, srai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srw - Percent_srai)**2)/(StdErr_srw**2 + StdErr_srai**2), df = 1, lower.tail = FALSE))
+srai_notsrai_chi <- left_join(srai_tab, notsrai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srai - Percent_notsrai)**2)/(StdErr_srai**2 + StdErr_notsrai**2), df = 1, lower.tail = FALSE))
+
+chi <- rbind(srai_srw_chi, srw_srai_chi, srai_notsrai_chi)
+
+# Filter after getting chi and bind together with chi
+df_tab <- df_tab %>% 
+  filter(is.na(RowPercent) | Levels != 'NO')
+df_all <- cbind(df_tab, chi)
+# To preserve order of values since spread alphabetizes
+level_order <- df_all %>% 
+  filter(is.na(RowPercent)) %>% 
+  .$var_levels
+#Create variables to be displayed
+df_all <- df_all %>% 
+  mutate(pop = ifelse(str_detect(Table, '\\*'), str_match(Table,'\\s([:alpha:]*)\\s')[,1], 'ALL')) %>% 
+  mutate(sub_pop = recode(str_trim(pop), "SRAI" = "AIAN", "SRW" = "White", .default = "All")) %>% 
+  mutate(percent = ifelse(!is.na(RowPercent), RowPercent, Percent)) %>% 
+  mutate(display = 
+           paste0(round(percent,digits = 0), "% (", 
+                  prettyNum(WgtFreq, digits = 0, big.mark = ',', scientific = FALSE),")",
+                  ifelse(chi_test < 0.05 & !is.na(chi_test),'*',''))) %>%
+  select(var_levels, sub_pop, display) %>% 
+  spread(key = sub_pop, value = display) %>% 
+  .[match(level_order, .$var_levels),] %>% 
+  rename(`Ever Told Have Diabetes` = var_levels) %>% 
+  select(c(1:2,4:3))
+rownames(df_all) <- NULL
+# Create table to be displayed in presentation
+df_all %>%  
+  kable('markdown', digits = 0, align = rep('c',ncol(.)), 
+        format.args = list(big.mark = ',')) %>% 
+  kable_styling(font_size = 7)
+```
+
+## Heart Disease
+```{r message = FALSE, echo = FALSE, warning = FALSE}
+var <- 'AB34'
+age <- 'adult'
+
+# Get table from tab, chi lists based on var, age above #####################
+df_tab <- tab[[paste0(var,'_',age,'_tab')]]
+colnames(df_tab)[colnames(df_tab) == paste0('F_',var)] <- 'var_levels'
+df_tab <- df_tab %>% 
+  mutate(var_levels = str_to_title(var_levels))
+  
+
+# Subset chi squared dataframe (only need p value of test)
+srai_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_srai = RowPercent, StdErr_srai = RowStdErr)
+srw_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRW')) %>% 
+  rename(Percent_srw = RowPercent, StdErr_srw = RowStdErr)
+notsrai_tab <- df_tab %>% 
+  filter(Levels == 'NO', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_notsrai = RowPercent, StdErr_notsrai = RowStdErr)
+
+srai_srw_chi <- left_join(srai_tab, srw_tab, by = 'var_levels') %>% 
+  transmute(chi_test = 1)
+srw_srai_chi <- left_join(srw_tab, srai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srw - Percent_srai)**2)/(StdErr_srw**2 + StdErr_srai**2), df = 1, lower.tail = FALSE))
+srai_notsrai_chi <- left_join(srai_tab, notsrai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srai - Percent_notsrai)**2)/(StdErr_srai**2 + StdErr_notsrai**2), df = 1, lower.tail = FALSE))
+
+chi <- rbind(srai_srw_chi, srw_srai_chi, srai_notsrai_chi)
+
+# Filter after getting chi and bind together with chi
+df_tab <- df_tab %>% 
+  filter(is.na(RowPercent) | Levels != 'NO')
+df_all <- cbind(df_tab, chi)
+# To preserve order of values since spread alphabetizes
+level_order <- df_all %>% 
+  filter(is.na(RowPercent)) %>% 
+  .$var_levels
+#Create variables to be displayed
+df_all <- df_all %>% 
+  mutate(pop = ifelse(str_detect(Table, '\\*'), str_match(Table,'\\s([:alpha:]*)\\s')[,1], 'ALL')) %>% 
+  mutate(sub_pop = recode(str_trim(pop), "SRAI" = "AIAN", "SRW" = "White", .default = "All")) %>% 
+  mutate(percent = ifelse(!is.na(RowPercent), RowPercent, Percent)) %>% 
+  mutate(display = 
+           paste0(round(percent,digits = 0), "% (", 
+                  prettyNum(WgtFreq, digits = 0, big.mark = ',', scientific = FALSE),")",
+                  ifelse(chi_test < 0.05 & !is.na(chi_test),'*',''))) %>%
+  select(var_levels, sub_pop, display) %>% 
+  spread(key = sub_pop, value = display) %>% 
+  .[match(level_order, .$var_levels),] %>% 
+  rename(`Ever Told Have Heart Disease` = var_levels) %>% 
+  select(c(1:2,4:3))
+rownames(df_all) <- NULL
+# Create table to be displayed in presentation
+df_all %>%  
+  kable('markdown', digits = 0, align = rep('c',ncol(.)), 
+        format.args = list(big.mark = ',')) %>% 
+  kable_styling(font_size = 7)
+```
+
+## Opioid Use
+```{r message = FALSE, echo = FALSE, warning = FALSE}
+var <- 'AC129'
+age <- 'adult'
+
+# Get table from tab, chi lists based on var, age above #####################
+df_tab <- tab[[paste0(var,'_',age,'_tab')]]
+colnames(df_tab)[colnames(df_tab) == paste0('F_',var)] <- 'var_levels'
+df_tab <- df_tab %>% 
+  mutate(var_levels = str_to_title(var_levels))
+  
+
+# Subset chi squared dataframe (only need p value of test)
+srai_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_srai = RowPercent, StdErr_srai = RowStdErr)
+srw_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRW')) %>% 
+  rename(Percent_srw = RowPercent, StdErr_srw = RowStdErr)
+notsrai_tab <- df_tab %>% 
+  filter(Levels == 'NO', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_notsrai = RowPercent, StdErr_notsrai = RowStdErr)
+
+srai_srw_chi <- left_join(srai_tab, srw_tab, by = 'var_levels') %>% 
+  transmute(chi_test = 3)
+srw_srai_chi <- left_join(srw_tab, srai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srw - Percent_srai)**2)/(StdErr_srw**2 + StdErr_srai**2), df = 1, lower.tail = FALSE))
+srai_notsrai_chi <- left_join(srai_tab, notsrai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srai - Percent_notsrai)**2)/(StdErr_srai**2 + StdErr_notsrai**2), df = 1, lower.tail = FALSE))
+
+chi <- rbind(srai_srw_chi, srw_srai_chi, srai_notsrai_chi)
+
+# Filter after getting chi and bind together with chi
+df_tab <- df_tab %>% 
+  filter(is.na(RowPercent) | Levels != 'NO')
+df_all <- cbind(df_tab, chi)
+# To preserve order of values since spread alphabetizes
+level_order <- df_all %>% 
+  filter(is.na(RowPercent)) %>% 
+  .$var_levels
+#Create variables to be displayed
+df_all <- df_all %>% 
+  mutate(pop = ifelse(str_detect(Table, '\\*'), str_match(Table,'\\s([:alpha:]*)\\s')[,1], 'ALL')) %>% 
+  mutate(sub_pop = recode(str_trim(pop), "SRAI" = "AIAN", "SRW" = "White", .default = "All")) %>% 
+  mutate(percent = ifelse(!is.na(RowPercent), RowPercent, Percent)) %>% 
+  mutate(display = 
+           paste0(round(percent,digits = 0), "% (", 
+                  prettyNum(WgtFreq, digits = 0, big.mark = ',', scientific = FALSE),")",
+                  ifelse(chi_test < 0.05 & !is.na(chi_test),'*',''))) %>%
+  select(var_levels, sub_pop, display) %>% 
+  spread(key = sub_pop, value = display) %>% 
+  .[match(level_order, .$var_levels),] %>% 
+  rename(`Misuse Prescription Pain Killers` = var_levels) %>% 
+  select(c(1:2,4:3))
+rownames(df_all) <- NULL
+# Create table to be displayed in presentation
+df_all %>%  
+  kable('markdown', digits = 0, align = rep('c',ncol(.)), 
+        format.args = list(big.mark = ',')) %>% 
+  kable_styling(font_size = 7)
+```
+
+## Ever Used Marijuana
+```{r message = FALSE, echo = FALSE, warning = FALSE}
+var <- 'AC115'
+age <- 'adult'
+
+# Get table from tab, chi lists based on var, age above #####################
+df_tab <- tab[[paste0(var,'_',age,'_tab')]]
+colnames(df_tab)[colnames(df_tab) == paste0('F_',var)] <- 'var_levels'
+df_tab <- df_tab %>% 
+  mutate(var_levels = str_to_title(var_levels))
+  
+
+# Subset chi squared dataframe (only need p value of test)
+srai_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_srai = RowPercent, StdErr_srai = RowStdErr)
+srw_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRW')) %>% 
+  rename(Percent_srw = RowPercent, StdErr_srw = RowStdErr)
+notsrai_tab <- df_tab %>% 
+  filter(Levels == 'NO', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_notsrai = RowPercent, StdErr_notsrai = RowStdErr)
+
+srai_srw_chi <- left_join(srai_tab, srw_tab, by = 'var_levels') %>% 
+  transmute(chi_test = 3)
+srw_srai_chi <- left_join(srw_tab, srai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srw - Percent_srai)**2)/(StdErr_srw**2 + StdErr_srai**2), df = 1, lower.tail = FALSE))
+srai_notsrai_chi <- left_join(srai_tab, notsrai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srai - Percent_notsrai)**2)/(StdErr_srai**2 + StdErr_notsrai**2), df = 1, lower.tail = FALSE))
+
+chi <- rbind(srai_srw_chi, srw_srai_chi, srai_notsrai_chi)
+
+# Filter after getting chi and bind together with chi
+df_tab <- df_tab %>% 
+  filter(is.na(RowPercent) | Levels != 'NO')
+df_all <- cbind(df_tab, chi)
+# To preserve order of values since spread alphabetizes
+level_order <- df_all %>% 
+  filter(is.na(RowPercent)) %>% 
+  .$var_levels
+#Create variables to be displayed
+df_all <- df_all %>% 
+  mutate(pop = ifelse(str_detect(Table, '\\*'), str_match(Table,'\\s([:alpha:]*)\\s')[,1], 'ALL')) %>% 
+  mutate(sub_pop = recode(str_trim(pop), "SRAI" = "AIAN", "SRW" = "White", .default = "All")) %>% 
+  mutate(percent = ifelse(!is.na(RowPercent), RowPercent, Percent)) %>% 
+  mutate(display = 
+           paste0(round(percent,digits = 0), "% (", 
+                  prettyNum(WgtFreq, digits = 0, big.mark = ',', scientific = FALSE),")",
+                  ifelse(chi_test < 0.05 & !is.na(chi_test),'*',''))) %>%
+  select(var_levels, sub_pop, display) %>% 
+  spread(key = sub_pop, value = display) %>% 
+  .[match(level_order, .$var_levels),] %>% 
+  rename(`Ever Tried Marijuana Hashish` = var_levels) %>% 
+  select(c(1:2,4:3))
+rownames(df_all) <- NULL
+# Create table to be displayed in presentation
+df_all %>%  
+  kable('markdown', digits = 0, align = rep('c',ncol(.)), 
+        format.args = list(big.mark = ',')) %>% 
+  kable_styling(font_size = 7)
+```
+
+## Marijuana Use - Frequency
+```{r message = FALSE, echo = FALSE, warning = FALSE}
+var <- 'AC118'
+age <- 'adult'
+
+# Get table from tab, chi lists based on var, age above #####################
+df_tab <- tab[[paste0(var,'_',age,'_tab')]]
+colnames(df_tab)[colnames(df_tab) == paste0('F_',var)] <- 'var_levels'
+df_tab <- df_tab %>% 
+  mutate(var_levels = str_to_title(var_levels))
+  
+
+# Subset chi squared dataframe (only need p value of test)
+srai_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_srai = RowPercent, StdErr_srai = RowStdErr)
+srw_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRW')) %>% 
+  rename(Percent_srw = RowPercent, StdErr_srw = RowStdErr)
+notsrai_tab <- df_tab %>% 
+  filter(Levels == 'NO', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_notsrai = RowPercent, StdErr_notsrai = RowStdErr)
+
+srai_srw_chi <- left_join(srai_tab, srw_tab, by = 'var_levels') %>% 
+  transmute(chi_test = 3)
+srw_srai_chi <- left_join(srw_tab, srai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srw - Percent_srai)**2)/(StdErr_srw**2 + StdErr_srai**2), df = 1, lower.tail = FALSE))
+srai_notsrai_chi <- left_join(srai_tab, notsrai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srai - Percent_notsrai)**2)/(StdErr_srai**2 + StdErr_notsrai**2), df = 1, lower.tail = FALSE))
+
+chi <- rbind(srai_srw_chi, srw_srai_chi, srai_notsrai_chi)
+
+# Filter after getting chi and bind together with chi
+df_tab <- df_tab %>% 
+  filter(is.na(RowPercent) | Levels != 'NO')
+df_all <- cbind(df_tab, chi)
+# To preserve order of values since spread alphabetizes
+level_order <- df_all %>% 
+  filter(is.na(RowPercent)) %>% 
+  .$var_levels
+#Create variables to be displayed
+df_all <- df_all %>% 
+  mutate(pop = ifelse(str_detect(Table, '\\*'), str_match(Table,'\\s([:alpha:]*)\\s')[,1], 'ALL')) %>% 
+  mutate(sub_pop = recode(str_trim(pop), "SRAI" = "AIAN", "SRW" = "White", .default = "All")) %>% 
+  mutate(percent = ifelse(!is.na(RowPercent), RowPercent, Percent)) %>% 
+  mutate(display = 
+           paste0(round(percent,digits = 0), "% (", 
+                  prettyNum(WgtFreq, digits = 0, big.mark = ',', scientific = FALSE),")",
+                  ifelse(chi_test < 0.05 & !is.na(chi_test),'*',''))) %>%
+  select(var_levels, sub_pop, display) %>% 
+  spread(key = sub_pop, value = display) %>% 
+  .[match(level_order, .$var_levels),] %>% 
+  rename(`Tobacco With Marijuana` = var_levels) %>% 
+  select(c(1:2,4:3))
+rownames(df_all) <- NULL
+# Create table to be displayed in presentation
+df_all %>%  
+  kable('markdown', digits = 0, align = rep('c',ncol(.)), 
+        format.args = list(big.mark = ',')) %>% 
+  kable_styling(font_size = 7)
+```
+
+## Method Of Marijuana Use - Joint/Bong/Pipe
+```{r message = FALSE, echo = FALSE, warning = FALSE}
+var <- 'AC119'
+age <- 'adult'
+
+# Get table from tab, chi lists based on var, age above #####################
+df_tab <- tab[[paste0(var,'_',age,'_tab')]]
+colnames(df_tab)[colnames(df_tab) == paste0('F_',var)] <- 'var_levels'
+df_tab <- df_tab %>% 
+  mutate(var_levels = str_to_title(var_levels))
+  
+
+# Subset chi squared dataframe (only need p value of test)
+srai_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_srai = RowPercent, StdErr_srai = RowStdErr)
+srw_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRW')) %>% 
+  rename(Percent_srw = RowPercent, StdErr_srw = RowStdErr)
+notsrai_tab <- df_tab %>% 
+  filter(Levels == 'NO', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_notsrai = RowPercent, StdErr_notsrai = RowStdErr)
+
+srai_srw_chi <- left_join(srai_tab, srw_tab, by = 'var_levels') %>% 
+  transmute(chi_test = 3)
+srw_srai_chi <- left_join(srw_tab, srai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srw - Percent_srai)**2)/(StdErr_srw**2 + StdErr_srai**2), df = 1, lower.tail = FALSE))
+srai_notsrai_chi <- left_join(srai_tab, notsrai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srai - Percent_notsrai)**2)/(StdErr_srai**2 + StdErr_notsrai**2), df = 1, lower.tail = FALSE))
+
+chi <- rbind(srai_srw_chi, srw_srai_chi, srai_notsrai_chi)
+
+# Filter after getting chi and bind together with chi
+df_tab <- df_tab %>% 
+  filter(is.na(RowPercent) | Levels != 'NO')
+df_all <- cbind(df_tab, chi)
+# To preserve order of values since spread alphabetizes
+level_order <- df_all %>% 
+  filter(is.na(RowPercent)) %>% 
+  .$var_levels
+#Create variables to be displayed
+df_all <- df_all %>% 
+  mutate(pop = ifelse(str_detect(Table, '\\*'), str_match(Table,'\\s([:alpha:]*)\\s')[,1], 'ALL')) %>% 
+  mutate(sub_pop = recode(str_trim(pop), "SRAI" = "AIAN", "SRW" = "White", .default = "All")) %>% 
+  mutate(percent = ifelse(!is.na(RowPercent), RowPercent, Percent)) %>% 
+  mutate(display = 
+           paste0(round(percent,digits = 0), "% (", 
+                  prettyNum(WgtFreq, digits = 0, big.mark = ',', scientific = FALSE),")",
+                  ifelse(chi_test < 0.05 & !is.na(chi_test),'*',''))) %>%
+  select(var_levels, sub_pop, display) %>% 
+  spread(key = sub_pop, value = display) %>% 
+  .[match(level_order, .$var_levels),] %>% 
+  rename(`Marijuana Method - Joint/Bong/Pipe` = var_levels) %>% 
+  select(c(1:2,4:3))
+rownames(df_all) <- NULL
+# Create table to be displayed in presentation
+df_all %>%  
+  kable('markdown', digits = 0, align = rep('c',ncol(.)), 
+        format.args = list(big.mark = ',')) %>% 
+  kable_styling(font_size = 7)
+```
+
+## Method Of Marijuana Use - Blunt
+```{r message = FALSE, echo = FALSE, warning = FALSE}
+var <- 'AC120'
+age <- 'adult'
+
+# Get table from tab, chi lists based on var, age above #####################
+df_tab <- tab[[paste0(var,'_',age,'_tab')]]
+colnames(df_tab)[colnames(df_tab) == paste0('F_',var)] <- 'var_levels'
+df_tab <- df_tab %>% 
+  mutate(var_levels = str_to_title(var_levels))
+  
+
+# Subset chi squared dataframe (only need p value of test)
+srai_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_srai = RowPercent, StdErr_srai = RowStdErr)
+srw_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRW')) %>% 
+  rename(Percent_srw = RowPercent, StdErr_srw = RowStdErr)
+notsrai_tab <- df_tab %>% 
+  filter(Levels == 'NO', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_notsrai = RowPercent, StdErr_notsrai = RowStdErr)
+
+srai_srw_chi <- left_join(srai_tab, srw_tab, by = 'var_levels') %>% 
+  transmute(chi_test = 3)
+srw_srai_chi <- left_join(srw_tab, srai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srw - Percent_srai)**2)/(StdErr_srw**2 + StdErr_srai**2), df = 1, lower.tail = FALSE))
+srai_notsrai_chi <- left_join(srai_tab, notsrai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srai - Percent_notsrai)**2)/(StdErr_srai**2 + StdErr_notsrai**2), df = 1, lower.tail = FALSE))
+
+chi <- rbind(srai_srw_chi, srw_srai_chi, srai_notsrai_chi)
+
+# Filter after getting chi and bind together with chi
+df_tab <- df_tab %>% 
+  filter(is.na(RowPercent) | Levels != 'NO')
+df_all <- cbind(df_tab, chi)
+# To preserve order of values since spread alphabetizes
+level_order <- df_all %>% 
+  filter(is.na(RowPercent)) %>% 
+  .$var_levels
+#Create variables to be displayed
+df_all <- df_all %>% 
+  mutate(pop = ifelse(str_detect(Table, '\\*'), str_match(Table,'\\s([:alpha:]*)\\s')[,1], 'ALL')) %>% 
+  mutate(sub_pop = recode(str_trim(pop), "SRAI" = "AIAN", "SRW" = "White", .default = "All")) %>% 
+  mutate(percent = ifelse(!is.na(RowPercent), RowPercent, Percent)) %>% 
+  mutate(display = 
+           paste0(round(percent,digits = 0), "% (", 
+                  prettyNum(WgtFreq, digits = 0, big.mark = ',', scientific = FALSE),")",
+                  ifelse(chi_test < 0.05 & !is.na(chi_test),'*',''))) %>%
+  select(var_levels, sub_pop, display) %>% 
+  spread(key = sub_pop, value = display) %>% 
+  .[match(level_order, .$var_levels),] %>% 
+  rename(`Marijuana Method - Blunt` = var_levels) %>% 
+  select(c(1:2,4:3))
+rownames(df_all) <- NULL
+# Create table to be displayed in presentation
+df_all %>%  
+  kable('markdown', digits = 0, align = rep('c',ncol(.)), 
+        format.args = list(big.mark = ',')) %>% 
+  kable_styling(font_size = 7)
+```
+
+## Method Of Marijuana Use - Eat
+```{r message = FALSE, echo = FALSE, warning = FALSE}
+var <- 'AC121'
+age <- 'adult'
+
+# Get table from tab, chi lists based on var, age above #####################
+df_tab <- tab[[paste0(var,'_',age,'_tab')]]
+colnames(df_tab)[colnames(df_tab) == paste0('F_',var)] <- 'var_levels'
+df_tab <- df_tab %>% 
+  mutate(var_levels = str_to_title(var_levels))
+  
+
+# Subset chi squared dataframe (only need p value of test)
+srai_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_srai = RowPercent, StdErr_srai = RowStdErr)
+srw_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRW')) %>% 
+  rename(Percent_srw = RowPercent, StdErr_srw = RowStdErr)
+notsrai_tab <- df_tab %>% 
+  filter(Levels == 'NO', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_notsrai = RowPercent, StdErr_notsrai = RowStdErr)
+
+srai_srw_chi <- left_join(srai_tab, srw_tab, by = 'var_levels') %>% 
+  transmute(chi_test = 3)
+srw_srai_chi <- left_join(srw_tab, srai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srw - Percent_srai)**2)/(StdErr_srw**2 + StdErr_srai**2), df = 1, lower.tail = FALSE))
+srai_notsrai_chi <- left_join(srai_tab, notsrai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srai - Percent_notsrai)**2)/(StdErr_srai**2 + StdErr_notsrai**2), df = 1, lower.tail = FALSE))
+
+chi <- rbind(srai_srw_chi, srw_srai_chi, srai_notsrai_chi)
+
+# Filter after getting chi and bind together with chi
+df_tab <- df_tab %>% 
+  filter(is.na(RowPercent) | Levels != 'NO')
+df_all <- cbind(df_tab, chi)
+# To preserve order of values since spread alphabetizes
+level_order <- df_all %>% 
+  filter(is.na(RowPercent)) %>% 
+  .$var_levels
+#Create variables to be displayed
+df_all <- df_all %>% 
+  mutate(pop = ifelse(str_detect(Table, '\\*'), str_match(Table,'\\s([:alpha:]*)\\s')[,1], 'ALL')) %>% 
+  mutate(sub_pop = recode(str_trim(pop), "SRAI" = "AIAN", "SRW" = "White", .default = "All")) %>% 
+  mutate(percent = ifelse(!is.na(RowPercent), RowPercent, Percent)) %>% 
+  mutate(display = 
+           paste0(round(percent,digits = 0), "% (", 
+                  prettyNum(WgtFreq, digits = 0, big.mark = ',', scientific = FALSE),")",
+                  ifelse(chi_test < 0.05 & !is.na(chi_test),'*',''))) %>%
+  select(var_levels, sub_pop, display) %>% 
+  spread(key = sub_pop, value = display) %>% 
+  .[match(level_order, .$var_levels),] %>% 
+  rename(`Marijuana Method - Eat` = var_levels) %>% 
+  select(c(1:2,4:3))
+rownames(df_all) <- NULL
+# Create table to be displayed in presentation
+df_all %>%  
+  kable('markdown', digits = 0, align = rep('c',ncol(.)), 
+        format.args = list(big.mark = ',')) %>% 
+  kable_styling(font_size = 7)
+```
+
+## Method Of Marijuana Use - Drink
+```{r message = FALSE, echo = FALSE, warning = FALSE}
+var <- 'AC122'
+age <- 'adult'
+
+# Get table from tab, chi lists based on var, age above #####################
+df_tab <- tab[[paste0(var,'_',age,'_tab')]]
+colnames(df_tab)[colnames(df_tab) == paste0('F_',var)] <- 'var_levels'
+df_tab <- df_tab %>% 
+  mutate(var_levels = str_to_title(var_levels))
+  
+
+# Subset chi squared dataframe (only need p value of test)
+srai_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_srai = RowPercent, StdErr_srai = RowStdErr)
+srw_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRW')) %>% 
+  rename(Percent_srw = RowPercent, StdErr_srw = RowStdErr)
+notsrai_tab <- df_tab %>% 
+  filter(Levels == 'NO', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_notsrai = RowPercent, StdErr_notsrai = RowStdErr)
+
+srai_srw_chi <- left_join(srai_tab, srw_tab, by = 'var_levels') %>% 
+  transmute(chi_test = 3)
+srw_srai_chi <- left_join(srw_tab, srai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srw - Percent_srai)**2)/(StdErr_srw**2 + StdErr_srai**2), df = 1, lower.tail = FALSE))
+srai_notsrai_chi <- left_join(srai_tab, notsrai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srai - Percent_notsrai)**2)/(StdErr_srai**2 + StdErr_notsrai**2), df = 1, lower.tail = FALSE))
+
+chi <- rbind(srai_srw_chi, srw_srai_chi, srai_notsrai_chi)
+
+# Filter after getting chi and bind together with chi
+df_tab <- df_tab %>% 
+  filter(is.na(RowPercent) | Levels != 'NO')
+df_all <- cbind(df_tab, chi)
+# To preserve order of values since spread alphabetizes
+level_order <- df_all %>% 
+  filter(is.na(RowPercent)) %>% 
+  .$var_levels
+#Create variables to be displayed
+df_all <- df_all %>% 
+  mutate(pop = ifelse(str_detect(Table, '\\*'), str_match(Table,'\\s([:alpha:]*)\\s')[,1], 'ALL')) %>% 
+  mutate(sub_pop = recode(str_trim(pop), "SRAI" = "AIAN", "SRW" = "White", .default = "All")) %>% 
+  mutate(percent = ifelse(!is.na(RowPercent), RowPercent, Percent)) %>% 
+  mutate(display = 
+           paste0(round(percent,digits = 0), "% (", 
+                  prettyNum(WgtFreq, digits = 0, big.mark = ',', scientific = FALSE),")",
+                  ifelse(chi_test < 0.05 & !is.na(chi_test),'*',''))) %>%
+  select(var_levels, sub_pop, display) %>% 
+  spread(key = sub_pop, value = display) %>% 
+  .[match(level_order, .$var_levels),] %>% 
+  rename(`Marijuana Method - Drink` = var_levels) %>% 
+  select(c(1:2,4:3))
+rownames(df_all) <- NULL
+# Create table to be displayed in presentation
+df_all %>%  
+  kable('markdown', digits = 0, align = rep('c',ncol(.)), 
+        format.args = list(big.mark = ',')) %>% 
+  kable_styling(font_size = 7)
+```
+
+## Method Of Marijuana Use - Vaporize
+```{r message = FALSE, echo = FALSE, warning = FALSE}
+var <- 'AC123'
+age <- 'adult'
+
+# Get table from tab, chi lists based on var, age above #####################
+df_tab <- tab[[paste0(var,'_',age,'_tab')]]
+colnames(df_tab)[colnames(df_tab) == paste0('F_',var)] <- 'var_levels'
+df_tab <- df_tab %>% 
+  mutate(var_levels = str_to_title(var_levels))
+  
+
+# Subset chi squared dataframe (only need p value of test)
+srai_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_srai = RowPercent, StdErr_srai = RowStdErr)
+srw_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRW')) %>% 
+  rename(Percent_srw = RowPercent, StdErr_srw = RowStdErr)
+notsrai_tab <- df_tab %>% 
+  filter(Levels == 'NO', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_notsrai = RowPercent, StdErr_notsrai = RowStdErr)
+
+srai_srw_chi <- left_join(srai_tab, srw_tab, by = 'var_levels') %>% 
+  transmute(chi_test = 3)
+srw_srai_chi <- left_join(srw_tab, srai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srw - Percent_srai)**2)/(StdErr_srw**2 + StdErr_srai**2), df = 1, lower.tail = FALSE))
+srai_notsrai_chi <- left_join(srai_tab, notsrai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srai - Percent_notsrai)**2)/(StdErr_srai**2 + StdErr_notsrai**2), df = 1, lower.tail = FALSE))
+
+chi <- rbind(srai_srw_chi, srw_srai_chi, srai_notsrai_chi)
+
+# Filter after getting chi and bind together with chi
+df_tab <- df_tab %>% 
+  filter(is.na(RowPercent) | Levels != 'NO')
+df_all <- cbind(df_tab, chi)
+# To preserve order of values since spread alphabetizes
+level_order <- df_all %>% 
+  filter(is.na(RowPercent)) %>% 
+  .$var_levels
+#Create variables to be displayed
+df_all <- df_all %>% 
+  mutate(pop = ifelse(str_detect(Table, '\\*'), str_match(Table,'\\s([:alpha:]*)\\s')[,1], 'ALL')) %>% 
+  mutate(sub_pop = recode(str_trim(pop), "SRAI" = "AIAN", "SRW" = "White", .default = "All")) %>% 
+  mutate(percent = ifelse(!is.na(RowPercent), RowPercent, Percent)) %>% 
+  mutate(display = 
+           paste0(round(percent,digits = 0), "% (", 
+                  prettyNum(WgtFreq, digits = 0, big.mark = ',', scientific = FALSE),")",
+                  ifelse(chi_test < 0.05 & !is.na(chi_test),'*',''))) %>%
+  select(var_levels, sub_pop, display) %>% 
+  spread(key = sub_pop, value = display) %>% 
+  .[match(level_order, .$var_levels),] %>% 
+  rename(`Marijuana Method - Vaporize` = var_levels) %>% 
+  select(c(1:2,4:3))
+rownames(df_all) <- NULL
+# Create table to be displayed in presentation
+df_all %>%  
+  kable('markdown', digits = 0, align = rep('c',ncol(.)), 
+        format.args = list(big.mark = ',')) %>% 
+  kable_styling(font_size = 7)
+```
+
+## Method Of Marijuana Use - Dab
+```{r message = FALSE, echo = FALSE, warning = FALSE}
+var <- 'AC124'
+age <- 'adult'
+
+# Get table from tab, chi lists based on var, age above #####################
+df_tab <- tab[[paste0(var,'_',age,'_tab')]]
+colnames(df_tab)[colnames(df_tab) == paste0('F_',var)] <- 'var_levels'
+df_tab <- df_tab %>% 
+  mutate(var_levels = str_to_title(var_levels))
+  
+
+# Subset chi squared dataframe (only need p value of test)
+srai_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_srai = RowPercent, StdErr_srai = RowStdErr)
+srw_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRW')) %>% 
+  rename(Percent_srw = RowPercent, StdErr_srw = RowStdErr)
+notsrai_tab <- df_tab %>% 
+  filter(Levels == 'NO', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_notsrai = RowPercent, StdErr_notsrai = RowStdErr)
+
+srai_srw_chi <- left_join(srai_tab, srw_tab, by = 'var_levels') %>% 
+  transmute(chi_test = 3)
+srw_srai_chi <- left_join(srw_tab, srai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srw - Percent_srai)**2)/(StdErr_srw**2 + StdErr_srai**2), df = 1, lower.tail = FALSE))
+srai_notsrai_chi <- left_join(srai_tab, notsrai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srai - Percent_notsrai)**2)/(StdErr_srai**2 + StdErr_notsrai**2), df = 1, lower.tail = FALSE))
+
+chi <- rbind(srai_srw_chi, srw_srai_chi, srai_notsrai_chi)
+
+# Filter after getting chi and bind together with chi
+df_tab <- df_tab %>% 
+  filter(is.na(RowPercent) | Levels != 'NO')
+df_all <- cbind(df_tab, chi)
+# To preserve order of values since spread alphabetizes
+level_order <- df_all %>% 
+  filter(is.na(RowPercent)) %>% 
+  .$var_levels
+#Create variables to be displayed
+df_all <- df_all %>% 
+  mutate(pop = ifelse(str_detect(Table, '\\*'), str_match(Table,'\\s([:alpha:]*)\\s')[,1], 'ALL')) %>% 
+  mutate(sub_pop = recode(str_trim(pop), "SRAI" = "AIAN", "SRW" = "White", .default = "All")) %>% 
+  mutate(percent = ifelse(!is.na(RowPercent), RowPercent, Percent)) %>% 
+  mutate(display = 
+           paste0(round(percent,digits = 0), "% (", 
+                  prettyNum(WgtFreq, digits = 0, big.mark = ',', scientific = FALSE),")",
+                  ifelse(chi_test < 0.05 & !is.na(chi_test),'*',''))) %>%
+  select(var_levels, sub_pop, display) %>% 
+  spread(key = sub_pop, value = display) %>% 
+  .[match(level_order, .$var_levels),] %>% 
+  rename(`Marijuana Method - Dab` = var_levels) %>% 
+  select(c(1:2,4:3))
+rownames(df_all) <- NULL
+# Create table to be displayed in presentation
+df_all %>%  
+  kable('markdown', digits = 0, align = rep('c',ncol(.)), 
+        format.args = list(big.mark = ',')) %>% 
+  kable_styling(font_size = 7)
+```
+
+## Method Of Marijuana Use - Other Way
+```{r message = FALSE, echo = FALSE, warning = FALSE}
+var <- 'AC125'
+age <- 'adult'
+
+# Get table from tab, chi lists based on var, age above #####################
+df_tab <- tab[[paste0(var,'_',age,'_tab')]]
+colnames(df_tab)[colnames(df_tab) == paste0('F_',var)] <- 'var_levels'
+df_tab <- df_tab %>%
+  mutate(var_levels = str_to_title(var_levels))
+# Cells were supressed, which created NA, Removing NA
+#df_tab <- na.omit(df_tab)
+
+# Subset chi squared dataframe (only need p value of test)
+srai_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRAI')) %>%
+  rename(Percent_srai = RowPercent, StdErr_srai = RowStdErr)
+srw_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRW')) %>%
+  rename(Percent_srw = RowPercent, StdErr_srw = RowStdErr)
+notsrai_tab <- df_tab %>%
+  filter(Levels == 'NO', str_detect(Table, 'SRAI')) %>%
+  rename(Percent_notsrai = RowPercent, StdErr_notsrai = RowStdErr)
+
+srai_srw_chi <- left_join(srai_tab, srw_tab, by = 'var_levels') %>%
+  transmute(chi_test = 3)
+srw_srai_chi <- left_join(srw_tab, srai_tab, by = 'var_levels') %>%
+  transmute(chi_test = pchisq(((Percent_srw - Percent_srai)**2)/(StdErr_srw**2 + StdErr_srai**2), df = 1, lower.tail = FALSE))
+srai_notsrai_chi <- left_join(srai_tab, notsrai_tab, by = 'var_levels') %>%
+  transmute(chi_test = pchisq(((Percent_srai - Percent_notsrai)**2)/(StdErr_srai**2 + StdErr_notsrai**2), df = 1, lower.tail = FALSE))
+
+chi <- rbind(srai_srw_chi, srw_srai_chi, srai_notsrai_chi)
+
+# Filter after getting chi and bind together with chi
+df_tab <- df_tab %>%
+  filter(is.na(RowPercent) | Levels != 'NO')
+df_all <- cbind(df_tab, chi)
+# To preserve order of values since spread alphabetizes
+level_order <- df_all %>%
+  filter(is.na(RowPercent)) %>%
+  .$var_levels
+#Create variables to be displayed
+df_all <- df_all %>%
+  mutate(pop = ifelse(str_detect(Table, '\\*'), str_match(Table,'\\s([:alpha:]*)\\s')[,1], 'ALL')) %>%
+  mutate(sub_pop = recode(str_trim(pop), "SRAI" = "AIAN", "SRW" = "White", .default = "All")) %>%
+  mutate(percent = ifelse(!is.na(RowPercent), RowPercent, Percent)) %>%
+  mutate(display =
+           paste0(round(percent,digits = 0), "% (",
+                  prettyNum(WgtFreq, digits = 0, big.mark = ',', scientific = FALSE),")",
+                  ifelse(chi_test < 0.05 & !is.na(chi_test),'*',''))) %>%
+  select(var_levels, sub_pop, display) %>%
+  spread(key = sub_pop, value = display) %>%
+  .[match(level_order, .$var_levels),] %>%
+  rename(`Marijuana Method - Other Way` = var_levels) %>%
+  select(c(1:2,4:3))
+rownames(df_all) <- NULL
+# Create table to be displayed in presentation
+df_all %>%
+  kable('markdown', digits = 0, align = rep('c',ncol(.)),
+        format.args = list(big.mark = ',')) %>%
+  kable_styling(font_size = 7)
+```
+
+## Current Dental Insurance Coverage
+```{r message = FALSE, echo = FALSE, warning = FALSE}
+var <- 'AG3'
+age <- 'adult'
+
+# Get table from tab, chi lists based on var, age above #####################
+df_tab <- tab[[paste0(var,'_',age,'_tab')]]
+colnames(df_tab)[colnames(df_tab) == paste0('F_',var)] <- 'var_levels'
+df_tab <- df_tab %>% 
+  mutate(var_levels = str_to_title(var_levels))
+  
+
+# Subset chi squared dataframe (only need p value of test)
+srai_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_srai = RowPercent, StdErr_srai = RowStdErr)
+srw_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRW')) %>% 
+  rename(Percent_srw = RowPercent, StdErr_srw = RowStdErr)
+notsrai_tab <- df_tab %>% 
+  filter(Levels == 'NO', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_notsrai = RowPercent, StdErr_notsrai = RowStdErr)
+
+srai_srw_chi <- left_join(srai_tab, srw_tab, by = 'var_levels') %>% 
+  transmute(chi_test = 3)
+srw_srai_chi <- left_join(srw_tab, srai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srw - Percent_srai)**2)/(StdErr_srw**2 + StdErr_srai**2), df = 1, lower.tail = FALSE))
+srai_notsrai_chi <- left_join(srai_tab, notsrai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srai - Percent_notsrai)**2)/(StdErr_srai**2 + StdErr_notsrai**2), df = 1, lower.tail = FALSE))
+
+chi <- rbind(srai_srw_chi, srw_srai_chi, srai_notsrai_chi)
+
+# Filter after getting chi and bind together with chi
+df_tab <- df_tab %>% 
+  filter(is.na(RowPercent) | Levels != 'NO')
+df_all <- cbind(df_tab, chi)
+# To preserve order of values since spread alphabetizes
+level_order <- df_all %>% 
+  filter(is.na(RowPercent)) %>% 
+  .$var_levels
+#Create variables to be displayed
+df_all <- df_all %>% 
+  mutate(pop = ifelse(str_detect(Table, '\\*'), str_match(Table,'\\s([:alpha:]*)\\s')[,1], 'ALL')) %>% 
+  mutate(sub_pop = recode(str_trim(pop), "SRAI" = "AIAN", "SRW" = "White", .default = "All")) %>% 
+  mutate(percent = ifelse(!is.na(RowPercent), RowPercent, Percent)) %>% 
+  mutate(display = 
+           paste0(round(percent,digits = 0), "% (", 
+                  prettyNum(WgtFreq, digits = 0, big.mark = ',', scientific = FALSE),")",
+                  ifelse(chi_test < 0.05 & !is.na(chi_test),'*',''))) %>%
+  select(var_levels, sub_pop, display) %>% 
+  spread(key = sub_pop, value = display) %>% 
+  .[match(level_order, .$var_levels),] %>% 
+  rename(`Have Dental Insurance` = var_levels) %>% 
+  select(c(1:2,4:3))
+rownames(df_all) <- NULL
+# Create table to be displayed in presentation
+df_all %>%  
+  kable('markdown', digits = 0, align = rep('c',ncol(.)), 
+        format.args = list(big.mark = ',')) %>% 
+  kable_styling(font_size = 7)
+```
+
+## Household Poverty Level
+```{r message = FALSE, echo = FALSE, warning = FALSE}
+var <- 'POVLL'
+age <- 'adult'
+
+# Get table from tab, chi lists based on var, age above #####################
+df_tab <- tab[[paste0(var,'_',age,'_tab')]]
+colnames(df_tab)[colnames(df_tab) == paste0('F_',var)] <- 'var_levels'
+df_tab <- df_tab %>% 
+  mutate(var_levels = str_to_title(var_levels))
+  
+
+# Subset chi squared dataframe (only need p value of test)
+srai_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_srai = RowPercent, StdErr_srai = RowStdErr)
+srw_tab <- df_tab %>%
+  filter(Levels == 'YES', str_detect(Table, 'SRW')) %>% 
+  rename(Percent_srw = RowPercent, StdErr_srw = RowStdErr)
+notsrai_tab <- df_tab %>% 
+  filter(Levels == 'NO', str_detect(Table, 'SRAI')) %>% 
+  rename(Percent_notsrai = RowPercent, StdErr_notsrai = RowStdErr)
+
+srai_srw_chi <- left_join(srai_tab, srw_tab, by = 'var_levels') %>% 
+  transmute(chi_test = 3)
+srw_srai_chi <- left_join(srw_tab, srai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srw - Percent_srai)**2)/(StdErr_srw**2 + StdErr_srai**2), df = 1, lower.tail = FALSE))
+srai_notsrai_chi <- left_join(srai_tab, notsrai_tab, by = 'var_levels') %>% 
+  transmute(chi_test = pchisq(((Percent_srai - Percent_notsrai)**2)/(StdErr_srai**2 + StdErr_notsrai**2), df = 1, lower.tail = FALSE))
+
+chi <- rbind(srai_srw_chi, srw_srai_chi, srai_notsrai_chi)
+
+# Filter after getting chi and bind together with chi
+df_tab <- df_tab %>% 
+  filter(is.na(RowPercent) | Levels != 'NO')
+df_all <- cbind(df_tab, chi)
+# To preserve order of values since spread alphabetizes
+level_order <- df_all %>% 
+  filter(is.na(RowPercent)) %>% 
+  .$var_levels
+#Create variables to be displayed
+df_all <- df_all %>% 
+  mutate(pop = ifelse(str_detect(Table, '\\*'), str_match(Table,'\\s([:alpha:]*)\\s')[,1], 'ALL')) %>% 
+  mutate(sub_pop = recode(str_trim(pop), "SRAI" = "AIAN", "SRW" = "White", .default = "All")) %>% 
+  mutate(percent = ifelse(!is.na(RowPercent), RowPercent, Percent)) %>% 
+  mutate(display = 
+           paste0(round(percent,digits = 0), "% (", 
+                  prettyNum(WgtFreq, digits = 0, big.mark = ',', scientific = FALSE),")",
+                  ifelse(chi_test < 0.05 & !is.na(chi_test),'*',''))) %>%
+  select(var_levels, sub_pop, display) %>% 
+  spread(key = sub_pop, value = display) %>% 
+  .[match(level_order, .$var_levels),] %>% 
+  rename(`Poverty Level` = var_levels) %>% 
+  select(c(1:2,4:3))
+rownames(df_all) <- NULL
+# Create table to be displayed in presentation
+df_all %>%  
+  kable('markdown', digits = 0, align = rep('c',ncol(.)), 
+        format.args = list(big.mark = ',')) %>% 
+  kable_styling(font_size = 7)
+```
